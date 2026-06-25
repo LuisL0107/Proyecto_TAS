@@ -1,0 +1,95 @@
+%% ============================================================
+%   MATLAB - RECEPTOR DE DATOS SERIAL
+%   Guarda los datos del Arduino Mega en un archivo
+% ============================================================
+
+clear all;
+close all;
+clc;
+
+%% ===== CONFIGURACIÓN =====
+% Puerto COM (cambia según tu sistema)
+% Windows: 'COM3', 'COM4', etc.
+% Linux/Mac: '/dev/ttyUSB0', '/dev/ttyACM0', etc.
+puerto = 'COM3';  % <--- CAMBIA ESTO
+
+% Velocidad de baudios (debe coincidir con Arduino)
+baudRate = 115200;
+
+% Archivo de salida
+nombreArchivo = sprintf('datos_%s.csv', datestr(now, 'yyyy-mm-dd_HH-MM-SS'));
+
+%% ===== CONECTAR AL PUERTO SERIAL =====
+try
+    % Crear objeto serial
+    s = serialport(puerto, baudRate);
+    configureTerminator(s, "LF");
+    flush(s);
+    
+    fprintf('========================================\n');
+    fprintf('   MATLAB - RECEPTOR DE DATOS\n');
+    fprintf('========================================\n');
+    fprintf('Puerto: %s\n', puerto);
+    fprintf('Baud rate: %d\n', baudRate);
+    fprintf('Archivo: %s\n', nombreArchivo);
+    fprintf('========================================\n');
+    fprintf('Esperando datos...\n');
+    fprintf('Presiona Ctrl+C para detener\n\n');
+    
+catch ME
+    fprintf('ERROR: No se pudo conectar al puerto %s\n', puerto);
+    fprintf('Verifica el puerto y que el Arduino esté conectado\n');
+    return;
+end
+
+%% ===== ABRIR ARCHIVO =====
+fid = fopen(nombreArchivo, 'w');
+fprintf(fid, 'timestamp,lat,lng,altitud,velocidad,satelites,temp_bmp,presion,temp_aht,humedad\n');
+
+%% ===== BUCLE DE LECTURA =====
+fprintf('Grabando datos...\n');
+contador = 0;
+
+try
+    while true
+        % Leer línea del puerto serial
+        if s.NumBytesAvailable > 0
+            linea = readline(s);
+            
+            % Verificar que la línea tenga datos
+            if ~isempty(linea) && contains(linea, ',')
+                % Escribir en archivo
+                fprintf(fid, '%s\n', linea);
+                contador = contador + 1;
+                
+                % Mostrar progreso cada 10 líneas
+                if mod(contador, 10) == 0
+                    fprintf('Registros guardados: %d\n', contador);
+                    
+                    % Mostrar último dato
+                    datos = strsplit(linea, ',');
+                    if length(datos) >= 10
+                        fprintf('  Último: Lat=%s Lng=%s Temp=%sC Hum=%s%%\n', ...
+                            datos{2}, datos{3}, datos{7}, datos{10});
+                    end
+                end
+            end
+        end
+        
+        % Pequeña pausa
+        pause(0.01);
+    end
+    
+catch ME
+    fprintf('\nDeteniendo...\n');
+end
+
+%% ===== CERRAR CONEXIÓN =====
+fclose(fid);
+clear s;
+
+fprintf('========================================\n');
+fprintf('PROCESO COMPLETADO\n');
+fprintf('Registros guardados: %d\n', contador);
+fprintf('Archivo: %s\n', nombreArchivo);
+fprintf('========================================\n');
