@@ -1,0 +1,107 @@
+%% ============================================================
+%   MATLAB - LECTURA Y VISUALIZACIÓN DE DATOS
+% ============================================================
+
+clear all;
+close all;
+clc;
+
+%% ===== SELECCIONAR ARCHIVO =====
+[filename, pathname] = uigetfile('*.csv', 'Selecciona el archivo de datos');
+if filename == 0
+    return;
+end
+
+archivo = fullfile(pathname, filename);
+fprintf('Leyendo archivo: %s\n', filename);
+
+%% ===== LEER DATOS =====
+data = readtable(archivo);
+
+% Renombrar columnas
+data.Properties.VariableNames = {
+    'timestamp', 'lat', 'lng', 'altitud', 'velocidad', ...
+    'satelites', 'temp_bmp', 'presion', 'temp_aht', 'humedad'
+};
+
+% Mostrar resumen
+fprintf('========================================\n');
+fprintf('RESUMEN DE DATOS\n');
+fprintf('========================================\n');
+fprintf('Registros: %d\n', height(data));
+fprintf('Período: %s a %s\n', data.timestamp(1), data.timestamp(end));
+fprintf('========================================\n');
+
+%% ===== ESTADÍSTICAS =====
+fprintf('\n--- ESTADÍSTICAS ---\n');
+fprintf('Temperatura BMP: %.1f ± %.1f °C\n', mean(data.temp_bmp), std(data.temp_bmp));
+fprintf('Presión: %.1f ± %.1f hPa\n', mean(data.presion), std(data.presion));
+fprintf('Temperatura AHT: %.1f ± %.1f °C\n', mean(data.temp_aht), std(data.temp_aht));
+fprintf('Humedad: %.1f ± %.1f %%\n', mean(data.humedad), std(data.humedad));
+fprintf('Satélites: %.0f ± %.0f\n', mean(data.satelites), std(data.satelites));
+
+%% ===== GRÁFICAS =====
+figure('Position', [100, 100, 1200, 800]);
+
+% 1. Temperatura
+subplot(2, 3, 1);
+plot(data.timestamp, data.temp_bmp, 'b-', 'LineWidth', 1.5);
+hold on;
+plot(data.timestamp, data.temp_aht, 'r-', 'LineWidth', 1.5);
+xlabel('Muestra');
+ylabel('Temperatura (°C)');
+title('Temperatura');
+legend('BMP280', 'AHT20');
+grid on;
+
+% 2. Presión
+subplot(2, 3, 2);
+plot(data.timestamp, data.presion, 'g-', 'LineWidth', 1.5);
+xlabel('Muestra');
+ylabel('Presión (hPa)');
+title('Presión');
+grid on;
+
+% 3. Humedad
+subplot(2, 3, 3);
+plot(data.timestamp, data.humedad, 'm-', 'LineWidth', 1.5);
+xlabel('Muestra');
+ylabel('Humedad (%)');
+title('Humedad');
+grid on;
+
+% 4. Satélites
+subplot(2, 3, 4);
+plot(data.timestamp, data.satelites, 'k-', 'LineWidth', 1.5);
+xlabel('Muestra');
+ylabel('Satélites');
+title('Satélites GPS');
+grid on;
+
+% 5. Velocidad
+subplot(2, 3, 5);
+plot(data.timestamp, data.velocidad, 'c-', 'LineWidth', 1.5);
+xlabel('Muestra');
+ylabel('Velocidad (km/h)');
+title('Velocidad');
+grid on;
+
+% 6. Mapa (si hay GPS)
+subplot(2, 3, 6);
+if sum(data.lat ~= 0) > 0
+    plot(data.lng, data.lat, 'b.-', 'LineWidth', 1);
+    hold on;
+    plot(data.lng(1), data.lat(1), 'go', 'MarkerSize', 10, 'LineWidth', 2);
+    plot(data.lng(end), data.lat(end), 'rs', 'MarkerSize', 10, 'LineWidth', 2);
+    xlabel('Longitud');
+    ylabel('Latitud');
+    title('Ruta GPS');
+    legend('Ruta', 'Inicio', 'Fin');
+    grid on;
+    axis equal;
+else
+    text(0.5, 0.5, 'Sin datos GPS', 'HorizontalAlignment', 'center');
+    title('Ruta GPS');
+end
+
+sgtitle(sprintf('Datos de: %s', filename));
