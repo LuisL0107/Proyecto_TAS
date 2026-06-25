@@ -1,0 +1,151 @@
+// ============================================================
+//   ARDUINO MEGA - GPS + BMP280 + AHT20 → Serial a PC
+//   Los datos se envían en formato CSV para fácil lectura
+// ============================================================
+
+#include <Wire.h>
+#include <TinyGPSPlus.h>
+#include <Adafruit_BMP280.h>
+#include <AHT20.h>
+
+// ==================== CONFIGURACIÓN ====================
+// GPS UART3: RX = D15, TX = D14
+#define GPS_RX_PIN    15
+#define GPS_TX_PIN    14
+
+// I2C: SDA = D20, SCL = D21
+#define I2C_SDA       A4
+#define I2C_SCL       A5
+
+// ==================== OBJETOS ====================
+TinyGPSPlus gps;
+Adafruit_BMP280 bmp;
+AHT20 aht20;
+
+// ==================== VARIABLES ====================
+// GPS
+double lat = 0, lng = 0;
+float altitud = 0, velocidad = 0;
+int satelites = 0;
+
+// BMP280
+float temp_bmp = 0, presion = 0;
+
+// AHT20
+float temp_aht = 0, humedad = 0;
+
+// Control
+unsigned long ultimoEnvio = 0;
+bool bmpOK = false;
+bool ahtOK = false;
+unsigned long contador = 0;
+
+// ==================== SETUP ====================
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  
+  Serial.println("========================================");
+  Serial.println("   ARDUINO MEGA - LOGGER DE DATOS");
+  Serial.println("========================================");
+  Serial.println("Formato: CSV (Compatible con MATLAB)");
+  Serial.println("========================================");
+  
+  // ===== I2C =====
+  Wire.begin();
+  Wire.setClock(100000);
+  
+  // ===== BMP280 =====
+  if(!bmp.begin(0x76)) {
+    if(!bmp.begin(0x77)) {
+      Serial.println("[BMP280] ERROR");
+      bmpOK = false;
+    } else {
+      bmpOK = true;
+      Serial.println("[BMP280] OK (0x77)");
+    }
+  } else {
+    bmpOK = true;
+    Serial.println("[BMP280] OK (0x76)");
+  }
+  
+  // ===== AHT20 =====
+  if(!aht20.begin()) {
+    Serial.println("[AHT20] ERROR");
+    ahtOK = false;
+  } else {
+    ahtOK = true;
+    Serial.println("[AHT20] OK");
+  }
+  
+  // ===== GPS (UART3) =====
+  Serial3.begin(9600);
+  Serial.println("[GPS] OK - UART3");
+  Serial.println("========================================");
+  
+  // Enviar cabecera CSV
+  Serial.println("timestamp,lat,lng,altitud,velocidad,satelites,temp_bmp,presion,temp_aht,humedad");
+}
+
+// ==================== LOOP ====================
+void loop() {
+  // ===== LEER GPS =====
+  while(Serial3.available() > 0) {
+    char c = Serial3.read();
+    gps.encode(c);
+  }
+  
+  // ===== ENVIAR DATOS CADA 2 SEGUNDOS =====
+  if(millis() - ultimoEnvio > 2000) {
+    ultimoEnvio = millis();
+    contador++;
+    
+    // Leer sensores
+    if(bmpOK) {
+      temp_bmp = bmp.readTemperature();
+      presion = bmp.readPressure() / 100.0F;
+    }
+    
+    if(ahtOK) {
+      temp_aht = aht20.getTemperature();
+      humedad = aht20.getHumidity();
+    }
+    
+    // Obtener GPS
+    if(gps.location.isValid()) {
+      lat = gps.location.lat();
+      lng = gps.location.lng();
+    }
+    if(gps.altitude.isValid()) {
+      altitud = gps.altitude.meters();
+    }
+    if(gps.speed.isValid()) {
+      velocidad = gps.speed.kmph();
+    }
+    satelites = gps.satellites.value();
+    
+    // ===== ENVIAR POR SERIAL (CSV) =====
+    // Formato: timestamp,lat,lng,altitud,velocidad,satelites,temp_bmp,presion,temp_aht,humedad
+    Serial.print(millis());
+    Serial.print(",");
+    Serial.print(lat, 6);
+    Serial.print(",");
+    Serial.print(lng, 6);
+    Serial.print(",");
+    Serial.print(altitud, 1);
+    Serial.print(",");
+    Serial.print(velocidad, 1);
+    Serial.print(",");
+    Serial.print(satelites);
+    Serial.print(",");
+    Serial.print(temp_bmp, 1);
+    Serial.print(",");
+    Serial.print(presion, 1);
+    Serial.print(",");
+    Serial.print(temp_aht, 1);
+    Serial.print(",");
+    Serial.println(humedad, 1);
+  }
+  
+  delay(10);
+}
